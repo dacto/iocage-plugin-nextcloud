@@ -1,0 +1,61 @@
+{
+    "name": "Nextcloud",
+    "plugin_schema": "2",
+    "release": "13.1-RELEASE",
+    "artifact": "https://github.com/dacto/iocage-plugin-nextcloud.git",
+    "official": false,
+    "properties": {
+        "nat": 1,
+        "nat_forwards": "tcp(80:8282),tcp(443:8283)"
+    },
+    "pkgs": [
+        "gnupg",
+        "ffmpeg",
+        "php82-ctype",
+        "php82-curl",
+        "php82-dom",
+        "php82-filter",
+        "php82-gd",
+        "php82-xml",
+        "php82-mbstring",
+        "php82-posix",
+        "php82-session",
+        "php82-simplexml",
+        "php82-xmlreader",
+        "php82-xmlwriter",
+        "php82-zip",
+        "php82-zlib",
+        "php82-fileinfo",
+        "php82-pdo_mysql",
+        "php82-bz2",
+        "php82-intl",
+        "php82-bcmath",
+        "php82-gmp",
+        "php82-exif",
+        "php82-pecl-APCu",
+        "php82-pecl-redis",
+        "php82-pecl-imagick-im7",
+        "php82-pcntl",
+        "php82-phar",
+        "php82-iconv",
+        "php82-xsl",
+        "php82-opcache",
+        "php82-sysvsem",
+        "nginx",
+        "mariadb106-server",
+        "redis",
+        "py39-fail2ban",
+        "py39-certbot"
+    ],
+    "packagesite": "http://pkg.FreeBSD.org/${ABI}/latest",
+    "fingerprints": {
+        "iocage-plugins": [
+            {
+                "function": "sha256",
+                "fingerprint": "b0170035af3acc5f3f3ae1859dc717101b4e6c1d0a794ad554928ca0cbb2f438"
+            }
+        ]
+    },
+    "revision": "0"
+}
+

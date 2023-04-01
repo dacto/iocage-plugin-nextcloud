@@ -23,6 +23,7 @@ fi
 envsubst "\${NEXTCLOUD_HTTPS_PORT}" < "/usr/local/etc/nginx/conf.d/nextcloud.$SCHEME.conf.template" > "/usr/local/etc/nginx/conf.d/nextcloud.conf"
 
 # Copy Nextcloud custom configuration
+mkdir -p /usr/local/www/nextcloud/config
 cp /root/config/truenas.config.php /usr/local/www/nextcloud/config/truenas.config.php
 chown -R www:www /usr/local/www/nextcloud/config
 chmod -R u+rw /usr/local/www/nextcloud/config

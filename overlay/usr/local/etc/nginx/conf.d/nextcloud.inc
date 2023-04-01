@@ -1,3 +1,9 @@
+# Path to the root of your installation
+root /usr/local/www/nextcloud/;
+
+# Prevent nginx HTTP Server Detection
+server_tokens off;
+
 # set max upload size
 client_max_body_size 512M;
 fastcgi_buffers 64 4K;
@@ -14,20 +20,31 @@ gzip_types application/atom+xml application/javascript application/json applicat
 # with the `ngx_pagespeed` module, uncomment this line to disable it.
 #pagespeed off;
 
+# The settings allows you to optimize the HTTP2 bandwitdth.
+# See https://blog.cloudflare.com/delivering-http-2-upload-speed-improvements/
+# for tunning hints
+client_body_buffer_size 512k;
+
 # HTTP response headers borrowed from Nextcloud `.htaccess`
 add_header Referrer-Policy                      "no-referrer"   always;
 add_header X-Content-Type-Options               "nosniff"       always;
 add_header X-Download-Options                   "noopen"        always;
 add_header X-Frame-Options                      "SAMEORIGIN"    always;
 add_header X-Permitted-Cross-Domain-Policies    "none"          always;
-add_header X-Robots-Tag                         "none"          always;
+add_header X-Robots-Tag                         "noindex, nofollow" always;
 add_header X-XSS-Protection                     "1; mode=block" always;
 
 # Remove X-Powered-By, which is an information leak
 fastcgi_hide_header X-Powered-By;
 
-# Path to the root of your installation
-root /usr/local/www/nextcloud/;
+# Add .mjs as a file extension for javascript
+# Either include it in the default mime.types list
+# or include you can include that list explicitly and add the file extension
+# only for Nextcloud like below:
+include mime.types;
+types {
+    application/javascript js mjs;
+}
 
 # Specify how to handle directories -- specifying `/index.php$request_uri`
 # here as the fallback means that Nginx always exhibits the desired behaviour
@@ -103,12 +120,18 @@ location ~ \.php(?:$|/) {
 
     fastcgi_intercept_errors on;
     fastcgi_request_buffering off;
+
+    fastcgi_max_temp_file_size 0;
 }
 
-location ~ \.(?:css|js|svg|gif|png|jpg|ico)$ {
+location ~ \.(?:css|js|svg|gif|png|jpg|ico|wasm|tflite|map)$ {
     try_files $uri /index.php$request_uri;
-    expires 6M;         # Cache-Control policy borrowed from `.htaccess`
+    add_header Cache-Control "public, max-age=15778463, $asset_immutable";
     access_log off;     # Optional: Don't log access to assets
+
+    location ~ \.wasm$ {
+        default_type application/wasm;
+    }
 }
 
 location ~ \.woff2?$ {
