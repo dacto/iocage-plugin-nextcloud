@@ -1,3 +1,11 @@
+## HOW-TO Install this fork
+
+```shell
+JSON=/tmp/nextcloud.json
+fetch -o "$JSON" 'https://raw.githubusercontent.com/dacto/iocage-plugin-nextcloud/master/nextcloud.json'
+iocage fetch -P "$JSON" --branch 'master' -n Nextcloud
+```
+
 # iocage-plugin-nextcloud
 
 Artifact file(s) for Nextcloud iocage plugin
