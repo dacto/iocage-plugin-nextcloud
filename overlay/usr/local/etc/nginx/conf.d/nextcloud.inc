@@ -43,7 +43,7 @@ fastcgi_hide_header X-Powered-By;
 # only for Nextcloud like below:
 include mime.types;
 types {
-    application/javascript js mjs;
+    application/javascript mjs;
 }
 
 # Specify how to handle directories -- specifying `/index.php$request_uri`

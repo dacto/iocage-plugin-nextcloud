@@ -2,7 +2,9 @@
 
 set -eu
 
-NEXTCLOUD_VERSION=26
+NEXTCLOUD_VERSION=25
+WEBROOT=/usr/local/www
+
 # Load environment variable from /etc/iocage-env
 . load_env
 
@@ -17,8 +19,44 @@ pw usermod www -G redis
 
 # Create the database directory
 DBDIR=/mnt/db
-mkdir -m 770 "$DBDIR"
-chown mysql:mysql "$DBDIR"
+install -d -m 770 -o mysql -g mysql "$DBDIR"
+
+# Create nextcloud data folder outside of web root
+DATADIR=/mnt/data
+install -d -m 770 -o www -g www "$DATADIR"
+
+# Make the default log directory and create the log file early to satisfy fail2ban
+LOGDIR=/var/log/nextcloud
+mkdir "$LOGDIR"
+touch "$LOGDIR"/nextcloud.log
+chown -R www:www "$LOGDIR"
+
+# create sessions tmp dir outside nextcloud installation
+SESSIONDIR="${WEBROOT}/nextcloud-sessions-tmp"
+install -d -m 770 -o www -g www "$SESSIONDIR"
+
+export LC_ALL=C
+# https://docs.nextcloud.com/server/13/admin_manual/installation/installation_wizard.html do not use the same name for user and db
+USER="dbadmin"
+DB="nextcloud"
+NCUSER="ncadmin"
+PASS="$(openssl rand --hex 8)"
+NCPASS="$(openssl rand --hex 8)"
+
+# Save the config value with the data
+INFO_PATH="${DATADIR}/NEXTCLOUD_INFO"
+cat >"$INFO_PATH" <<__INFO__
+Database Name: ${DB}
+Database User: ${USER}
+Database Password: ${PASS}
+
+Nextcloud Admin User: ${NCUSER}
+Nextcloud Admin Password: ${NCPASS}
+__INFO__
+
+# Symlink for the expected iocage plugin info
+IOCAGE_INFO_PATH=/root/PLUGIN_INFO
+ln -s "$INFO_PATH" "$IOCAGE_INFO_PATH"
 
 # Enable the necessary services
 sysrc -f /etc/rc.conf nginx_enable="YES"
@@ -28,68 +66,43 @@ sysrc -f /etc/rc.conf fail2ban_enable="YES"
 sysrc -f /etc/rc.conf mysql_enable="YES"
 sysrc -f /etc/rc.conf mysql_dbdir="$DBDIR"
 
-# Start the service
-service nginx start 2>/dev/null
-service php-fpm start 2>/dev/null
+# Start the services
 service mysql-server start 2>/dev/null
 service redis start 2>/dev/null
+service fail2ban start 2>/dev/null
+service php-fpm start 2>/dev/null
+service nginx start 2>/dev/null
 
-# https://docs.nextcloud.com/server/13/admin_manual/installation/installation_wizard.html do not use the same name for user and db
-USER="dbadmin"
-DB="nextcloud"
-NCUSER="ncadmin"
-
-# Save the config values
-echo "$DB" > /root/dbname
-echo "$USER" > /root/dbuser
-echo "$NCUSER" > /root/ncuser
-export LC_ALL=C
-openssl rand --hex 8 > /root/dbpassword
-openssl rand --hex 8 > /root/ncpassword
-PASS=$(cat /root/dbpassword)
-NCPASS=$(cat /root/ncpassword)
-
-# Configure mysql
-mysqladmin -u root password "${PASS}"
-mysql -u root -p"${PASS}" --connect-expired-password <<-EOF
+# Configure MariaDB
+mysqladmin -u root password "$PASS"
+mysql -u root -p"$PASS" --connect-expired-password <<__SQL__
 ALTER USER 'root'@'localhost' IDENTIFIED BY '${PASS}';
 CREATE DATABASE ${DB};
 GRANT ALL PRIVILEGES ON ${DB}.* TO '${USER}'@'localhost' IDENTIFIED BY '${PASS}';
 FLUSH PRIVILEGES;
-EOF
+__SQL__
 
-# Make the default log directory
-mkdir /var/log/nextcloud
-chown www:www /var/log/nextcloud
+# Download Nextcloud
+NC="latest-${NEXTCLOUD_VERSION}.tar.bz2"
+fetch -o /tmp \
+    https://download.nextcloud.com/server/releases/"$NC" \
+    https://download.nextcloud.com/server/releases/"$NC".asc \
+    https://nextcloud.com/nextcloud.asc
 
-# Install nextcloud
-FILE="latest-${NEXTCLOUD_VERSION}.tar.bz2"
-if ! fetch -o /tmp \
-        https://download.nextcloud.com/server/releases/"${FILE}" \
-        https://download.nextcloud.com/server/releases/"${FILE}".asc \
-        https://nextcloud.com/nextcloud.asc
-then
-    echo "Failed to download Nextcloud"
-    exit 1
-fi
+# Verify artifact's GPG signature"
+gpg --import /tmp/nextcloud.asc >/dev/null 2>/dev/null
+gpg --verify "/tmp/${NC}".asc >/dev/null 2>/dev/null
 
-gpg --import /tmp/nextcloud.asc
-if ! gpg --verify /tmp/"${FILE}".asc; then
-    echo "GPG Signature Verification Failed!"
-    echo "The Nextcloud download is corrupt."
-    exit 1
-fi
+NC_WEBROOT="${WEBROOT}/nextcloud"
+tar xjf "/tmp/${NC}" -C "$NC_WEBROOT" --strip-components=1
 
-tar xjf /tmp/"${FILE}" -C /usr/local/www/
-chown -R www:www /usr/local/www/nextcloud/
+# Give full ownership of the nextcloud directory to www
+chown -R www:www "$NC_WEBROOT"
+# Removing rwx permission on the nextcloud folder to others users
+chmod -R o-rwx "$NC_WEBROOT"
 
-# Create nextcloud data folder outside of web root
-DATADIR=/mnt/data
-mkdir -m 770 -p "$DATADIR"
-chown www:www "$DATADIR"
-
-# Use occ to complete Nextcloud installation
-su -m www -c "php /usr/local/www/nextcloud/occ maintenance:install \
+# Finalize Nextcloud installation
+occ "maintenance:install \
   --database=\"mysql\" \
   --database-name=\"nextcloud\" \
   --database-user=\"${USER}\" \
@@ -99,26 +112,5 @@ su -m www -c "php /usr/local/www/nextcloud/occ maintenance:install \
   --admin-pass=\"${NCPASS}\" \
   --data-dir=\"${DATADIR}\""
 
-su -m www -c "php /usr/local/www/nextcloud/occ background:cron"
-
-su -m www -c "php /usr/local/www/nextcloud/occ config:system:set trusted_domains 1 --value='${IOCAGE_HOST_ADDRESS}'"
-
-# create sessions tmp dir outside nextcloud installation
-mkdir -p /usr/local/www/nextcloud-sessions-tmp >/dev/null 2>/dev/null
-chmod o-rwx /usr/local/www/nextcloud-sessions-tmp
-chown -R www:www /usr/local/www/nextcloud-sessions-tmp
-
-# Starting fail2ban
-service fail2ban start 2>/dev/null
-
-# Removing rwx permission on the nextcloud folder to others users
-chmod -R o-rwx /usr/local/www/nextcloud
-# Give full ownership of the nextcloud directory to www
-chown -R www:www /usr/local/www/nextcloud
-
-echo "Database Name: $DB" > /root/PLUGIN_INFO
-echo "Database User: $USER" >> /root/PLUGIN_INFO
-echo "Database Password: $PASS" >> /root/PLUGIN_INFO
-
-echo "Nextcloud Admin User: $NCUSER" >> /root/PLUGIN_INFO
-echo "Nextcloud Admin Password: $NCPASS" >> /root/PLUGIN_INFO
+occ "background:cron"
+occ "config:system:set trusted_domains 1 --value='${IOCAGE_HOST_ADDRESS}'"
