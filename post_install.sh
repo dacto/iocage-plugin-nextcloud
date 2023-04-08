@@ -2,7 +2,7 @@
 
 set -eu
 
-NEXTCLOUD_VERSION=25
+NEXTCLOUD_VERSION=22
 WEBROOT=/usr/local/www
 
 # Load environment variable from /etc/iocage-env
