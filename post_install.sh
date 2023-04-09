@@ -2,7 +2,7 @@
 
 set -eu
 
-NEXTCLOUD_VERSION=25
+NEXTCLOUD_VERSION=26
 WEBROOT=/usr/local/www
 
 # Load environment variable from /etc/iocage-env
@@ -18,11 +18,11 @@ generate_self_signed_tls_certificates
 pw usermod www -G redis
 
 # Create the database directory
-DBDIR=/mnt/db
+DBDIR=/usr/local/nextcloud/db
 install -d -m 770 -o mysql -g mysql "$DBDIR"
 
 # Create nextcloud data folder outside of web root
-DATADIR=/mnt/data
+DATADIR=/usr/local/nextcloud/data
 install -d -m 770 -o www -g www "$DATADIR"
 
 # Make the default log directory and create the log file early to satisfy fail2ban
